@@ -124,7 +124,7 @@ generate_certificates_certbot() {
 
 # calculate the next stack id
 generate_stack_id() {
-    local sid=$( find $WORKDIR -type d -name "stack*" | sed 's/^.*stack_//' | sort -n | tail -1 )
+    local sid=$( find ./ -type d -name "stack_*" | sed 's/^.*stack_//' | sort -n | tail -1 )
     if [[ -n $sid ]]
     then
         echo $(( $sid + 1 ))
@@ -134,10 +134,10 @@ generate_stack_id() {
 }
 
 # print active stacks
-print_status() {
-    for sid in $( find ./ -type d -name "stack*" | sed 's/^.*stack_//' )
+print_info() {
+    for sid in $( find ./ -type d -name "stack_*" | sed 's/^.*stack_//' )
     do
-        local domains=$(grep "server_name" "nginx/stack$sid.conf" | sed -e 's/^.*server_name *//' -e 's/;//' | tr '\n' ' ')
+        local domains=$(grep "server_name" "nginx/stack_$sid.conf" | sed -e 's/^.*server_name *//' -e 's/;//' | tr '\n' ' ')
         echo "$sid $domains"
     done
 }
@@ -149,6 +149,7 @@ print_help(){
     echo "  command:"
     echo "    add [DEFAULT]:  to init a new system and/or add a new stack"
     echo "    del:            to delete a stack"
+    echo "    info:           to get info of active stacks"
     echo "    clear:          to delete all stacks"
 }
 

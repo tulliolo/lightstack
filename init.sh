@@ -25,6 +25,9 @@ fi
 #     exit 1
 # fi
 
+SID=$(generate_stack_id)
+STACK="stack_$SID"
+
 # Migration path
 if [[ -d data && -d letsencrypt && -d lnbitsdata && -f .env && -f default.conf && -f docker-compose.yml ]]; then
     echo ">>>A previous installation was detected<<<"
@@ -59,9 +62,6 @@ if [[ -d data && -d letsencrypt && -d lnbitsdata && -f .env && -f default.conf &
 
     # Restore on error
     trap "migration_trap" EXIT
-
-    SID=1
-    STACK="stack_$SID"
 
     mkdir -p nginx $STACK
 
@@ -132,6 +132,36 @@ if [[ -d data && -d letsencrypt && -d lnbitsdata && -f .env && -f default.conf &
 
     exit 0
 fi
+
+case $1 in
+  ""|"add")
+    ;;
+
+  "clear")
+    echo "clear"
+    ;;
+
+  "del")
+    echo "del"
+    ;;
+
+  "info")
+    if [[ $SID -eq 1 ]]; then
+        echo "The system is not initialized."
+        echo "Please, run 'sudo ./init.sh' to add the first stack"
+    else
+        echo "You have the following active stacks:"
+        print_info | column -t -N "ID,PHOENIXD,LNBITS"
+    fi
+    ;;
+
+  *)
+    echo "Unsupported command '$1'" >&2
+    print_help
+    exit 1
+    ;;
+esac
+
 
 # if [[ $1 =~ ^clear$ ]]; then
 # 	docker compose stop
