@@ -5,7 +5,7 @@ services:
     image: massmux/phoenixd
     restart: on-failure
     volumes:
-      - ${PWD}/data:/root/.phoenix
+      - ./data:/root/.phoenix
     working_dir: /app
     environment:
       - TZ=Europe/Rome
@@ -20,8 +20,8 @@ services:
     restart: on-failure
     stop_grace_period: 1m
     volumes:
-      - ${PWD}/lnbitsdata:/app/data
-      - ${PWD}/.env:/app/.env
+      - ./lnbitsdata:/app/data
+      - ./.env:/app/.env
     environment:
       FORWARDED_ALLOW_IPS: "*"
     networks:
