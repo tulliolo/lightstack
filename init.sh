@@ -138,7 +138,20 @@ case $1 in
     ;;
 
   "clear")
-    echo "clear"
+    if [[ $SID -gt 1 ]]; then
+        echo "You have the following active stacks:"
+        print_info | column -t -N "ID,PHOENIXD,LNBITS"
+        echo
+        echo ">>>This will remove all of your stacks. Data and configurations will not be recoverable.<<<"
+        read -p "Are you sure you want to continue? (y/N): " clearyesno
+        echo
+
+        if [[ $clearyesno =~ ^[Yy]$ ]]; then
+            docker compose down
+            rm -Rf letsencrypt nginx stack_* docker-compose.yml
+            echo "Setup cleared"
+        fi
+    fi
     ;;
 
   "del")
