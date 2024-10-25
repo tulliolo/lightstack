@@ -11,7 +11,7 @@ generate_password() {
 update_env() {
     local key=$1
     local value=$2
-    local file=".env"
+    local file="$STACK/.env"
     if grep -q "^$key=" "$file"; then
         sed -i "s|^$key=.*|$key=$value|" "$file"
     else
@@ -120,6 +120,84 @@ generate_certificates_certbot() {
     echo "Valid certificates generated successfully using Certbot."
     echo "Copying letsencrypt dir..."
     sudo cp -R /etc/letsencrypt .
+}
+
+# calculate the next stack id
+generate_stack_id() {
+    local sid=$( find $WORKDIR -type d -name "stack*" | sed 's/^.*stack_//' | sort -n | tail -1 )
+    if [[ -n $sid ]]
+    then
+        echo $(( $sid + 1 ))
+    else
+        echo 1
+    fi
+}
+
+# print active stacks
+print_status() {
+    for sid in $( find ./ -type d -name "stack*" | sed 's/^.*stack_//' )
+    do
+        local domains=$(grep "server_name" "nginx/stack$sid.conf" | sed -e 's/^.*server_name *//' -e 's/;//' | tr '\n' ' ')
+        echo "$sid $domains"
+    done
+}
+
+# print script help
+print_help(){
+    echo
+    echo "Usage: init.sh [command]"
+    echo "  command:"
+    echo "    add [DEFAULT]:  to init a new system and/or add a new stack"
+    echo "    del:            to delete a stack"
+    echo "    clear:          to delete all stacks"
+}
+
+# Restore on error during migration
+migration_trap() {
+    local exit_code=$?
+
+    if [[ $exit_code -eq 0 ]]; then
+        rm -rf .backup
+    else
+        echo
+        echo "***An error occurred during the migration process***"
+        echo "Your previous stack will be restored."
+        echo
+        
+        if [[ -f docker-compose.yml ]]; then
+            # Stop all containers
+            echo "Stopping all containers..."
+            docker compose down
+            echo "All containers have been stopped."
+        fi
+
+        # Restore configurations and data
+        echo "Restoring configurations and data"
+        rm -rf letsencrypt nginx $STACK docker-compose.yml
+        cd .backup
+        mv -t ../ data letsencrypt lnbitsdata .env default.conf docker-compose.yml
+        if [[ -d pgdata ]]; then
+            mv pgdata ../
+        fi
+        if [[ -d pgtmp ]]; then
+            mv pgtmp ../
+        fi
+        cd ../
+        rm -rf .backup
+        echo "Restore completed."
+
+        # Start all containers
+        echo "Starting all containers..."
+        docker compose up -d
+        echo "All containers have been started."
+        echo
+
+        echo "***Migration failed***"
+        echo "Your previous system was restored and is now ready for use."
+        echo "You can save logs and notify the issue at https://github.com/massmux/lightstack/issues."
+    fi
+
+    exit $exit_code
 }
 
 ## Functions section end.
