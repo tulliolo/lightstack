@@ -122,45 +122,5 @@ generate_certificates_certbot() {
     sudo cp -R /etc/letsencrypt .
 }
 
-# Restore stack on migration failure
-migration_trap() {
-    exit_code=$?
-
-    if [[ $exit_code -eq 0 ]]; then
-        echo "Cleaning up migration data..."
-        ## TODO
-        echo
-
-        echo "Migration complete. Your system is now ready for use."
-    else
-        echo "***An error occurred, your previous stack will be restored***"
-        echo
-        
-        if [[ -f docker-compose.yml ]]; then
-            # Stop all containers
-            echo "Stopping all containers..."
-            docker compose down
-            echo "All containers have been stopped."
-        fi
-
-        echo "Restoring previous configurations..."
-        # Remove new files
-        rm -rf docker-compose.yml nginx letsencrypt $stack
-
-        # Restore old files
-        cd .migration
-        mv -t ../ default.conf docker-compose.yml .env data letsencrypt lnbitsdata pgdata pgtmp
-        cd ..
-        echo "All configurations have been restored."
-
-        echo "Restarting all containers with the previous configurations..."
-        docker compose up -d
-        echo "Restore complete. All containers have been successfully started."
-        echo 
-        
-        echo "***Migration process failed***"
-        echo "You can open an issue at https://github.com/massmux/lightstack/issues" 
-    fi
-}
-
 ## Functions section end.
+

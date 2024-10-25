@@ -8,5 +8,4 @@ pgdata
 certs
 nginx
 stack*
-.migration
 .env
