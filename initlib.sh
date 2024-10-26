@@ -76,13 +76,6 @@ generate_certificates_certbot() {
     local lnbits_domain=$2
 
     echo "Generating valid certificates using Certbot..."
-    echo "Port 80 must be open on the host server..."
-
-    # Check if Certbot is installed
-    if ! command -v certbot &> /dev/null; then
-        echo "Certbot is not installed. Please install Certbot and try again."
-        exit 1
-    fi
 
     # Prompt for email address
     read -p "Enter an email address for important account notifications: " cert_email
@@ -134,7 +127,7 @@ generate_stack_id() {
 }
 
 # print active stacks
-print_info() {
+print_stacks() {
     for sid in $( find ./ -type d -name "stack_*" | sed 's/^.*stack_//' )
     do
         local domains=$(grep "server_name" "nginx/stack_$sid.conf" | sed -e 's/^.*server_name *//' -e 's/;//' | tr '\n' ' ')
@@ -148,9 +141,8 @@ print_help(){
     echo "Usage: init.sh [command]"
     echo "  command:"
     echo "    add [DEFAULT]:  to init a new system and/or add a new stack"
-    echo "    del:            to delete a stack"
-    echo "    info:           to get info of active stacks"
     echo "    clear:          to delete all stacks"
+    echo "    del:            to delete a stack"
 }
 
 # Restore on error during migration
@@ -174,9 +166,9 @@ migration_trap() {
 
         # Restore configurations and data
         echo "Restoring configurations and data"
-        rm -rf letsencrypt nginx $STACK docker-compose.yml
+        rm -rf nginx $STACK docker-compose.yml
         cd .backup
-        mv -t ../ data letsencrypt lnbitsdata .env default.conf docker-compose.yml
+        mv -t ../ data lnbitsdata .env default.conf docker-compose.yml
         if [[ -d pgdata ]]; then
             mv pgdata ../
         fi
@@ -193,8 +185,50 @@ migration_trap() {
         echo "All containers have been started."
         echo
 
-        echo "***Migration failed***"
+        echo "***Migration failed with code $exit_code***"
         echo "Your previous system was restored and is now ready for use."
+        echo "You can save logs and notify the issue at https://github.com/massmux/lightstack/issues."
+    fi
+
+    exit $exit_code
+}
+
+# Restore on error during init/add
+init_trap() {
+    local exit_code=$?
+
+    if [[ ! $exit_code -eq 0 ]]; then
+        echo
+        echo "***An error occurred during the init process***"
+        echo "Cleaning up..."
+
+        if docker ps | grep -E "lightstack-(lnbits|phoenixd|postgres)-$SID"; then
+            # Stop containers
+            echo "Stopping $STACK containers..."
+            docker rm -f $( docker ps | grep -E "lightstack-(lnbits|phoenixd|postgres)-$SID" | awk '{print $1}' )
+            echo "$STACK containers have been stopped."
+        fi
+        
+        rm -rf $STACK nginx/$STACK.conf
+        sed -i "/$STACK/d" docker-compose.yml
+
+        if [[ $( print_stacks | wc -l ) -eq 0 ]]; then
+            # Stop all containers
+            echo "Stopping all containers..."
+            docker compose down
+            echo "All containers have been stopped."
+
+            rm -rf letsencrypt nginx docker-compose.yml
+        else
+            # Restarting nginx
+            echo "Restarting nginx container..."
+            docker compose restart nginx
+            echo "nginx container restarted"
+        fi
+        
+        echo "Cleanup completed."
+        echo
+        echo "***Init failed with code $exit_code***"
         echo "You can save logs and notify the issue at https://github.com/massmux/lightstack/issues."
     fi
 
