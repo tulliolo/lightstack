@@ -1,5 +1,9 @@
 services:
   phoenixd:
+    build:
+      context: ../
+      tags:
+        - "massmux/phoenixd"
     container_name: ${COMPOSE_PROJECT_NAME}-phoenixd
     hostname: phoenixd
     image: massmux/phoenixd
