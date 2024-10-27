@@ -13,6 +13,12 @@ if [ ! "$(id -u)" -eq 0 ]; then
     exit 1
 fi
 
+# Check if Certbot is installed
+if ! command -v certbot &> /dev/null; then
+    echo "Certbot is not installed. Please install Certbot and try again." >&2
+    exit 1
+fi
+
 # # Check if ufw is installed
 # if ! command -v ufw &> /dev/null; then
 #     echo "ufw Firewall is not installed on this system. Please install and run again." >&2
@@ -24,12 +30,6 @@ fi
 #     echo "ufw Firewall is not active. Please enable ufw first." >&2
 #     exit 1
 # fi
-
-# Check if Certbot is installed
-if ! command -v certbot &> /dev/null; then
-    echo "Certbot is not installed. Please install Certbot and try again." >&2
-    exit 1
-fi
     
 # # Check if port 80 is allowed in ufw
 # if ! ufw status | grep -q "80"; then
@@ -139,8 +139,8 @@ if [[ -d data && -d letsencrypt && -d lnbitsdata && -f .env && -f default.conf &
     echo "You have the following active stacks:"
     print_stacks | sort | column -t -N "ID,PHOENIXD,LNBITS"
 
-    PHOENIXD_DOMAIN=$( print_stacks | awk 'print $2' )
-    LNBITS_DOMAIN=$( print_stacks | awk 'print $3' )
+    PHOENIXD_DOMAIN=$( print_stacks | awk {'print $2'} )
+    LNBITS_DOMAIN=$( print_stacks | awk {'print $3'} )
     
     echo 
     echo "Initialization complete. All containers have been successfully started with the new configurations."
