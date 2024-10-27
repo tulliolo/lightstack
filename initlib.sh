@@ -141,13 +141,16 @@ print_help(){
     echo "Usage: init.sh [command]"
     echo "  command:"
     echo "    add [DEFAULT]:  to init a new system and/or add a new stack"
-    echo "    clear:          to delete all stacks"
-    echo "    del:            to delete a stack"
+    echo "    clear:          to remove all stacks"
+    echo "    del|rem:        to remove a stack"
+    echo "    help:           to show this message"
 }
 
 # Restore on error during migration
 migration_trap() {
     local exit_code=$?
+
+    trap - SIGINT SIGQUIT SIGTERM
 
     if [[ $exit_code -eq 0 ]]; then
         rm -rf .backup
@@ -197,32 +200,33 @@ migration_trap() {
 init_trap() {
     local exit_code=$?
 
+    trap - SIGINT SIGQUIT SIGTERM
+    
     if [[ ! $exit_code -eq 0 ]]; then
         echo
         echo "***An error occurred during the init process***"
         echo "Cleaning up..."
 
+        # Stop containers
+        echo "Stopping $STACK containers..."
         if docker ps | grep -E "lightstack-(lnbits|phoenixd|postgres)-$SID"; then
-            # Stop containers
-            echo "Stopping $STACK containers..."
             docker rm -f $( docker ps | grep -E "lightstack-(lnbits|phoenixd|postgres)-$SID" | awk '{print $1}' )
-            echo "$STACK containers have been stopped."
         fi
+        docker compose down nginx
+        echo "$STACK containers have been stopped."
         
+        echo "Removing $STACK data..."
         rm -rf $STACK nginx/$STACK.conf
         sed -i "/$STACK/d" docker-compose.yml
-
         if [[ $( print_stacks | wc -l ) -eq 0 ]]; then
-            # Stop all containers
-            echo "Stopping all containers..."
-            docker compose down
-            echo "All containers have been stopped."
-
             rm -rf letsencrypt nginx docker-compose.yml
-        else
+        fi
+        echo "$STACK data successfully removed."
+
+        if [[ $( print_stacks | wc -l ) -gt 0 ]]; then
             # Restarting nginx
             echo "Restarting nginx container..."
-            docker compose restart nginx
+            docker compose up -d
             echo "nginx container restarted"
         fi
         

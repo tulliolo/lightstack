@@ -53,7 +53,6 @@ if [[ -d data && -d letsencrypt && -d lnbitsdata && -f .env && -f default.conf &
     echo
     
     if [[ ! $migrateyesno =~ ^[Yy]$ ]]; then
-        echo "Bye"
         exit 0
     fi
 
@@ -75,6 +74,9 @@ if [[ -d data && -d letsencrypt && -d lnbitsdata && -f .env && -f default.conf &
     echo "Backup completed"
 
     # Restore on error
+    trap "exit 128" SIGINT
+    trap "exit 129" SIGQUIT
+    trap "exit 143" SIGTERM
     trap "migration_trap" EXIT
 
     mkdir -p nginx $STACK
@@ -118,20 +120,27 @@ if [[ -d data && -d letsencrypt && -d lnbitsdata && -f .env && -f default.conf &
     sed -i "s|\(http://lnbits\)|\1-$SID|" nginx/$STACK.conf
 
     # Verify the contents of the updated files
-    echo "Relevant contents of the .env file after update:"
-    grep -E "^(LNBITS_BACKEND_WALLET_CLASS|PHOENIXD_API_ENDPOINT|PHOENIXD_API_PASSWORD|LNBITS_DATABASE_URL|LNBITS_SITE_TITLE|LNBITS_SITE_TAGLINE|LNBITS_SITE_DESCRIPTION)=" $STACK/.env
     echo
-    echo "Relevant contents of the nginx file after update:"
+    echo "Relevant contents of the nginx/$STACK.conf file after update:"
     grep -E "(server_name|ssl_certificate|proxy_pass)" nginx/$STACK.conf | sed 's/^ *//'
     echo
-    echo "Setup completed."
+    echo "Relevant contents of the $STACK/.env file after update:"
+    grep -E "^(LNBITS_BACKEND_WALLET_CLASS|PHOENIXD_API_ENDPOINT|PHOENIXD_API_PASSWORD|LNBITS_DATABASE_URL|LNBITS_SITE_TITLE|LNBITS_SITE_TAGLINE|LNBITS_SITE_DESCRIPTION)=" $STACK/.env
+    echo
+    echo "Migration completed."
 
     # Restart all containers
     echo "Restarting all containers..."
     docker compose up -d
+    echo "All containers have been started."
 
-    LNBITS_DOMAIN=$( grep server_name nginx/$STACK.conf | sed -e 's/^ *server_name *//' -e 's/;$//' | tail -1 )
-    PHOENIXD_DOMAIN=$( grep server_name nginx/$STACK.conf | sed -e 's/^ *server_name *//' -e 's/;$//' | head -1 )
+    # Verify active stacks
+    echo
+    echo "You have the following active stacks:"
+    print_stacks | sort | column -t -N "ID,PHOENIXD,LNBITS"
+
+    PHOENIXD_DOMAIN=$( print_stacks | awk 'print $2' )
+    LNBITS_DOMAIN=$( print_stacks | awk 'print $3' )
     
     echo 
     echo "Initialization complete. All containers have been successfully started with the new configurations."
@@ -161,17 +170,35 @@ case $1 in
     echo
     read -p "Enter the domain for Phoenixd API (e.g., api.yourdomain.com): " PHOENIXD_DOMAIN
     read -p "Enter the domain for LNbits (e.g., lnbits.yourdomain.com): " LNBITS_DOMAIN
-    read -p "Do you want real Letsencrypt certificates to be issued? (y/n): " letscertificates
-    read -p "Do you want LNBits to use PostgreSQL? (y/n): " postgresyesno
+    read -p "Do you want real Letsencrypt certificates to be issued? (y/N): " letscertificates
+    read -p "Do you want LNBits to use PostgreSQL? (y/N): " postgresyesno
+    
+    if [[ ! $letscertificates =~ ^[Yy]$ ]]; then
+        letscertificates="n"
+    fi
+    if [[ ! $postgresyesno =~ ^[Yy]$ ]]; then
+        postgresyesno="n"
+    fi
     echo
+    echo "A new $STACK is going to be added with the following specs:"
+    echo "$SID $PHOENIXD_DOMAIN $LNBITS_DOMAIN $letscertificates $postgresyesno" | column -t -N "ID,PHOENIXD,LNBITS,LETSENCRYPT,POSTGRES"
+    read -p "Do you want to continue? (y/N): " addyesno
+    echo
+
+    if [[ ! $addyesno =~ ^[Yy]$ ]]; then
+        exit 0
+    fi
+
+    trap "exit 128" SIGINT
+    trap "exit 129" SIGQUIT
+    trap "exit 143" SIGTERM
+    trap init_trap EXIT
 
     # Copy example files
     mkdir -p nginx $STACK
     if [[ ! -f docker-compose.yml ]]; then
         cp docker-compose.yml.example docker-compose.yml 
     fi
-
-    trap init_trap EXIT
 
     cp default.conf.example nginx/$STACK.conf
     if [[ $postgresyesno =~ ^[Yy]$ ]]; then
@@ -182,7 +209,7 @@ case $1 in
     	cp .env.sqlite.example $STACK/.env
     fi
 
-    echo "docker-compose.yml, $STACK.conf and .env files set up."
+    echo "docker-compose.yml, nginx/$STACK.conf and $STACK/.env files set up."
     echo
 
     # Generate certificates
@@ -303,6 +330,7 @@ case $1 in
     # Stop stack containers
     echo "Stopping $STACK containers..."
     docker rm -f $( docker ps | grep -E "lightstack-(lnbits|phoenixd|postgres)-$SID" | awk '{print $1}' )
+    docker compose down nginx
     
     echo "$STACK containers have been stopped."
 
@@ -338,13 +366,13 @@ case $1 in
         exit 1
     fi
 
-    # Verify the contents of the .env file
-    echo
-    echo "Relevant contents of the $STACK/.env file after update:"
-    grep -E "^(LNBITS_BACKEND_WALLET_CLASS|PHOENIXD_API_ENDPOINT|PHOENIXD_API_PASSWORD|LNBITS_DATABASE_URL|LNBITS_SITE_TITLE|LNBITS_SITE_TAGLINE|LNBITS_SITE_DESCRIPTION)=" $STACK/.env
+    # Verify the contents of the files
     echo
     echo "Relevant contents of the nginx/$STACK.conf file after update:"
     grep -E "(server_name|ssl_certificate|proxy_pass)" nginx/$STACK.conf | sed 's/^ *//'
+    echo
+    echo "Relevant contents of the $STACK/.env file after update:"
+    grep -E "^(LNBITS_BACKEND_WALLET_CLASS|PHOENIXD_API_ENDPOINT|PHOENIXD_API_PASSWORD|LNBITS_DATABASE_URL|LNBITS_SITE_TITLE|LNBITS_SITE_TAGLINE|LNBITS_SITE_DESCRIPTION)=" $STACK/.env
     echo
 
     echo "Configuration of phoenix.conf and .env update completed."
@@ -359,6 +387,11 @@ case $1 in
     # Restart all containers
     echo "Restarting all containers with the new configurations..."
     docker compose up -d
+
+    # Verify active stacks
+    echo
+    echo "You have the following active stacks:"
+    print_stacks | sort | column -t -N "ID,PHOENIXD,LNBITS"
     
     echo 
     echo "Initialization complete. All containers have been successfully started with the new configurations."
@@ -374,7 +407,8 @@ case $1 in
 
   "clear")
     if [[ $( print_stacks | wc -l ) -gt 0 ]]; then
-        echo ">>>This will remove all of your stacks. Data and configurations will not be recoverable.<<<"
+        echo ">>>This will remove all of your stacks. Data will not be recoverable<<<"
+        echo
         read -p "Are you sure you want to continue? (y/N): " clearyesno
         echo
 
@@ -386,8 +420,72 @@ case $1 in
     fi
     ;;
 
-  "del")
-    echo "del"
+  "del"|"rem")
+    if [[ $( print_stacks | wc -l ) -eq 0 ]]; then
+        echo "No active stacks found."
+        echo "Please, run 'sudo ./init.sh' in order to initialize the system."
+        print_help
+        exit 0
+    fi
+
+    if [[ $( print_stacks | wc -l ) -eq 1 ]]; then
+        SID=$( print_stacks | awk '{print $1}' )
+    else
+        read -p "Which stack ID do you want to delete? " SID
+    
+        if ! print_stacks | awk '{print $1}' | grep $SID; then
+            echo "ERROR: stack $SID not found" >&2
+            exit 1
+        fi
+    fi
+    STACK="stack_$SID"
+
+    echo
+    echo ">>>This will remove stack $SID. Data will not be recoverable<<<"
+    echo
+    read -p "Are you sure you want to continue? (y/N): " remyesno
+
+    if [[ ! $remyesno =~ ^[Yy]$ ]]; then
+        exit 0
+    fi
+
+    # Stop stack containers
+    echo "Stopping $STACK containers..."
+    if [[ $( print_stacks | wc -l ) -eq 1 ]]; then
+        docker compose down
+    else
+        if docker ps | grep -E "lightstack-(lnbits|phoenixd|postgres)-$SID"; then
+            docker rm -f $( docker ps | grep -E "lightstack-(lnbits|phoenixd|postgres)-$SID" | awk '{print $1}' )
+        fi
+    fi
+    echo "$STACK containers have been stopped."
+
+    # Remove data
+    echo "Removing $STACK data..."
+    if [[ $( print_stacks | wc -l ) -eq 1 ]]; then
+        rm -rf letsencrypt nginx $STACK docker-compose.yml
+    else
+        rm -rf nginx/$STACK.conf rm -rf $STACK
+        sed -i "/$STACK/d" docker-compose.yml
+    fi
+    echo "$STACK data removed."
+
+    # Restart nginx
+    if [[ $( print_stacks | wc -l ) -gt 1 ]]; then
+        echo "Restarting nginx..."
+        docker compose restart nginx
+        echo "Nginx restarted."
+    fi
+    echo "$STACK successfully removed."
+
+    if [[ $( print_stacks | wc -l ) -gt 0 ]]; then
+        echo "You have the following active stacks:"
+        print_stacks | sort | column -t -N "ID,PHOENIXD,LNBITS"
+    fi
+    ;;
+
+  "help")
+    print_help
     ;;
 
   *)
