@@ -19,25 +19,25 @@ if ! command -v certbot &> /dev/null; then
     exit 1
 fi
 
-# # Check if ufw is installed
-# if ! command -v ufw &> /dev/null; then
-#     echo "ufw Firewall is not installed on this system. Please install and run again." >&2
-#     exit 1
-# fi
+# Check if ufw is installed
+if ! command -v ufw &> /dev/null; then
+    echo "ufw Firewall is not installed on this system. Please install and run again." >&2
+    exit 1
+fi
 
-# # Check if ufw is active
-# if ! ufw status | grep -q "Status: active"; then
-#     echo "ufw Firewall is not active. Please enable ufw first." >&2
-#     exit 1
-# fi
+# Check if ufw is active
+if ! ufw status | grep -q "Status: active"; then
+    echo "ufw Firewall is not active. Please enable ufw first." >&2
+    exit 1
+fi
     
-# # Check if port 80 is allowed in ufw
-# if ! ufw status | grep -q "80"; then
-#     echo "Port $PORT is not allowed through ufw." >&2
-#     echo "Port 80 status open is necessary to run certbot. Please open and run again" >&2
-#     exit 1
-# fi
-# echo
+# Check if port 80 is allowed in ufw
+if ! ufw status | grep -q "80"; then
+    echo "Port $PORT is not allowed through ufw." >&2
+    echo "Port 80 status open is necessary to run certbot. Please open and run again" >&2
+    exit 1
+fi
+echo
 
 SID=$(generate_stack_id)
 STACK="stack_$SID"
