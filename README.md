@@ -1,6 +1,8 @@
 # Full Phoenixd Stack
 
- Just run your own self-custodial cloud Lightning node on your VPS, from your domain name, with this stack. You immediately get a LNBits instance on your own node and the phoenixd endpoint available on a SSL connection
+ Just run your own self-custodial cloud Lightning node on your VPS, from your domain name, with this stack. You immediately get a LNBits instance on your own node and the phoenixd endpoint available on a SSL connection.
+
+ A multistack feature has been added and makes possible to add multiple stacks to the same VPS, served simultaneously.
 
 ## Installation
 
@@ -41,6 +43,25 @@ In case you need to start inizialization from the beginning, you need to clear e
 ./init.sh clear
 ```
 Please note that this will clear all data, configuration files and database in existing directory. If you had funds in that node, you will loose them all, so be careful and check it before
+
+ Help shows usage and active stacks. Stacks can be also removed by the below commands:
+
+```
+dev@lightstack:~/lightstack$ sudo ./init.sh help
+
+You have the following active stacks:
+ID  PHOENIXD            LNBITS
+1   n1.yourdomain.com   lb1.yourdomain.com
+2   n2.yourdomain.com   lb2.yourdomain.com
+
+
+Usage: init.sh [command]
+  command:
+    add [DEFAULT]:  to init a new system and/or add a new stack
+    clear:          to remove all stacks
+    del|rem:        to remove a stack
+    help:           to show this message
+```
 
 ### Access
 
