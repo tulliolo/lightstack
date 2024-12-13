@@ -11,7 +11,7 @@ generate_password() {
 update_env() {
     local key=$1
     local value=$2
-    local file=".env"
+    local file="$STACK/.env"
     if grep -q "^$key=" "$file"; then
         sed -i "s|^$key=.*|$key=$value|" "$file"
     else
@@ -76,13 +76,6 @@ generate_certificates_certbot() {
     local lnbits_domain=$2
 
     echo "Generating valid certificates using Certbot..."
-    echo "Port 80 must be open on the host server..."
-
-    # Check if Certbot is installed
-    if ! command -v certbot &> /dev/null; then
-        echo "Certbot is not installed. Please install Certbot and try again."
-        exit 1
-    fi
 
     # Prompt for email address
     read -p "Enter an email address for important account notifications: " cert_email
@@ -120,6 +113,130 @@ generate_certificates_certbot() {
     echo "Valid certificates generated successfully using Certbot."
     echo "Copying letsencrypt dir..."
     sudo cp -R /etc/letsencrypt .
+}
+
+# calculate the next stack id
+generate_stack_id() {
+    local sid=$( find ./ -type d -name "stack_*" | sed 's/^.*stack_//' | sort -n | tail -1 )
+    if [[ -n $sid ]]
+    then
+        echo $(( $sid + 1 ))
+    else
+        echo 1
+    fi
+}
+
+# print active stacks
+print_stacks() {
+    for sid in $( find ./ -type d -name "stack_*" | sed 's/^.*stack_//' )
+    do
+        local domains=$(grep "server_name" "nginx/stack_$sid.conf" | sed -e 's/^.*server_name *//' -e 's/;//' | tr '\n' ' ')
+        echo "$sid $domains"
+    done
+}
+
+# print script help
+print_help(){
+    echo
+    echo "Usage: init.sh [command]"
+    echo "  command:"
+    echo "    add [DEFAULT]:  to init a new system and/or add a new stack"
+    echo "    clear:          to remove all stacks"
+    echo "    del|rem:        to remove a stack"
+    echo "    help:           to show this message"
+}
+
+# Restore on error during migration
+migration_trap() {
+    local exit_code=$?
+
+    trap - SIGINT SIGQUIT SIGTERM
+
+    if [[ $exit_code -eq 0 ]]; then
+        rm -rf .backup
+    else
+        echo
+        echo "***An error occurred during the migration process***"
+        echo "Your previous stack will be restored."
+        echo
+        
+        if [[ -f docker-compose.yml ]]; then
+            # Stop all containers
+            echo "Stopping all containers..."
+            docker compose down
+            echo "All containers have been stopped."
+        fi
+
+        # Restore configurations and data
+        echo "Restoring configurations and data"
+        rm -rf nginx $STACK docker-compose.yml
+        cd .backup
+        mv -t ../ data lnbitsdata .env default.conf docker-compose.yml
+        if [[ -d pgdata ]]; then
+            mv pgdata ../
+        fi
+        if [[ -d pgtmp ]]; then
+            mv pgtmp ../
+        fi
+        cd ../
+        rm -rf .backup
+        echo "Restore completed."
+
+        # Start all containers
+        echo "Starting all containers..."
+        docker compose up -d
+        echo "All containers have been started."
+        echo
+
+        echo "***Migration failed with code $exit_code***"
+        echo "Your previous system was restored and is now ready for use."
+        echo "You can save logs and notify the issue at https://github.com/massmux/lightstack/issues."
+    fi
+
+    exit $exit_code
+}
+
+# Restore on error during init/add
+init_trap() {
+    local exit_code=$?
+
+    trap - SIGINT SIGQUIT SIGTERM
+    
+    if [[ ! $exit_code -eq 0 ]]; then
+        echo
+        echo "***An error occurred during the init process***"
+        echo "Cleaning up..."
+
+        # Stop containers
+        echo "Stopping $STACK containers..."
+        if docker ps | grep -E "lightstack-(lnbits|phoenixd|postgres)-$SID"; then
+            docker rm -f $( docker ps | grep -E "lightstack-(lnbits|phoenixd|postgres)-$SID" | awk '{print $1}' )
+        fi
+        docker compose down nginx
+        echo "$STACK containers have been stopped."
+        
+        echo "Removing $STACK data..."
+        rm -rf $STACK nginx/$STACK.conf
+        sed -i "/$STACK/d" docker-compose.yml
+        if [[ $( print_stacks | wc -l ) -eq 0 ]]; then
+            rm -rf letsencrypt nginx docker-compose.yml
+        fi
+        echo "$STACK data successfully removed."
+
+        if [[ $( print_stacks | wc -l ) -gt 0 ]]; then
+            # Restarting nginx
+            echo "Restarting nginx container..."
+            docker compose up -d
+            echo "nginx container restarted"
+        fi
+        
+        echo "Cleanup completed."
+        echo
+        echo "***Init failed with code $exit_code***"
+        echo "You can save logs and notify the issue at https://github.com/massmux/lightstack/issues."
+    fi
+
+    exit $exit_code
 }
 
 ## Functions section end.

@@ -5,4 +5,7 @@ docker-compose.yml
 lnbitsdata
 pgtmp
 pgdata
+nginx
+stack*
+.backup
 .env
