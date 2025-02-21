@@ -74,23 +74,14 @@ generate_certificates() {
 generate_certificates_certbot() {
     local phoenixd_domain=$1
     local lnbits_domain=$2
+    local cert_email=$3  # Aggiungiamo l'email come terzo parametro
 
     echo "Generating valid certificates using Certbot..."
-
-    # Prompt for email address
-    read -p "Enter an email address for important account notifications: " cert_email
-
-    # Prompt for Terms of Service agreement
-    echo "Please read the Let's Encrypt Terms of Service at https://letsencrypt.org/documents/LE-SA-v1.2-November-15-2017.pdf"
-    read -p "Do you agree to the Let's Encrypt Terms of Service? (y/n): " tos_agreement
-    if [[ ! $tos_agreement =~ ^[Yy]$ ]]; then
-        echo "You must agree to the Terms of Service to continue."
-        exit 1
-    fi
+    echo "DEBUG: Using email: $cert_email" >&2
 
     # Generate certificate for Phoenixd domain
     echo "Generating certificate for $phoenixd_domain"
-    sudo certbot certonly --standalone -d $phoenixd_domain --email $cert_email --agree-tos
+    sudo certbot certonly --standalone -d "$phoenixd_domain" --email "$cert_email" --agree-tos --non-interactive
 
     if [ $? -eq 0 ]; then
         echo "Certificate for $phoenixd_domain generated successfully."
@@ -101,7 +92,7 @@ generate_certificates_certbot() {
 
     # Generate certificate for LNbits domain
     echo "Generating certificate for $lnbits_domain"
-    sudo certbot certonly --standalone -d $lnbits_domain --email $cert_email --agree-tos
+    sudo certbot certonly --standalone -d "$lnbits_domain" --email "$cert_email" --agree-tos --non-interactive
 
     if [ $? -eq 0 ]; then
         echo "Certificate for $lnbits_domain generated successfully."
