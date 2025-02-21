@@ -30,6 +30,7 @@ services:
       FORWARDED_ALLOW_IPS: "*"
     networks:
       - backend
+      - frontend
 
   postgres:
     container_name: ${COMPOSE_PROJECT_NAME}-postgres

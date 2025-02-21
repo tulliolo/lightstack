@@ -30,3 +30,4 @@ services:
       FORWARDED_ALLOW_IPS: "*"
     networks:
       - backend
+      - frontend

@@ -63,6 +63,19 @@ Usage: init.sh [command]
     help:           to show this message
 ```
 
+### Install Web Interface
+To install the web interface, run:
+
+```
+cd ~
+git clone https://github.com/massmux/lightstack.git
+cd lightstack
+sudo ./install.sh
+```
+
+This command will set up the web-based management interface for your LightStack. The interface provides an easy way to monitor and manage your node.
+
+
 ### Access
 
 Access LNBITS instance at:

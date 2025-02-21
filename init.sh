@@ -172,22 +172,43 @@ case $1 in
     read -p "Enter the domain for LNbits (e.g., lnbits.yourdomain.com): " LNBITS_DOMAIN
     read -p "Do you want real Letsencrypt certificates to be issued? (y/N): " letscertificates
     read -p "Do you want LNBits to use PostgreSQL? (y/N): " postgresyesno
-    
-    if [[ ! $letscertificates =~ ^[Yy]$ ]]; then
-        letscertificates="n"
-    fi
-    if [[ ! $postgresyesno =~ ^[Yy]$ ]]; then
-        postgresyesno="n"
-    fi
-    echo
-    echo "A new $STACK is going to be added with the following specs:"
-    echo "$SID $PHOENIXD_DOMAIN $LNBITS_DOMAIN $letscertificates $postgresyesno" | column -t -N "ID,PHOENIXD,LNBITS,LETSENCRYPT,POSTGRES"
-    read -p "Do you want to continue? (y/N): " addyesno
-    echo
 
-    if [[ ! $addyesno =~ ^[Yy]$ ]]; then
-        exit 0
+    echo "DEBUG: PostgreSQL initial value: '$postgresyesno'" >&2
+    if [[ $postgresyesno =~ ^[Yy]$ ]]; then
+        postgresyesno="y"
+        echo "DEBUG: Using PostgreSQL configuration" >&2
+        echo "DEBUG: Creating directories..." >&2
+        mkdir -p $STACK nginx
+        echo "DEBUG: Copying configuration files..." >&2
+        cp docker-compose.yml.stack.example $STACK/docker-compose.yml
+        cp .env.example $STACK/.env
+    else
+        postgresyesno="n"
+        echo "DEBUG: Using SQLite configuration" >&2
+        echo "DEBUG: Creating directories..." >&2
+        mkdir -p $STACK nginx
+        echo "DEBUG: Copying configuration files..." >&2
+        cp docker-compose.yml.stack.sqlite.example $STACK/docker-compose.yml
+        cp .env.sqlite.example $STACK/.env
     fi
+
+   echo "DEBUG: PostgreSQL final value: '$postgresyesno'" >&2
+   echo
+   echo "A new $STACK is going to be added with the following specs:"
+   echo "$SID $PHOENIXD_DOMAIN $LNBITS_DOMAIN $letscertificates $postgresyesno" | column -t -N "ID,PHOENIXD,LNBITS,LETSENCRYPT,POSTGRES"
+
+   # Check if script is running interactively
+   if [ -t 0 ]; then
+       # Interactive mode
+       read -p "Do you want to continue? (y/N): " addyesno
+       echo
+       if [[ ! $addyesno =~ ^[Yy]$ ]]; then
+           exit 0
+       fi
+   else
+       # Non-interactive mode (API)
+       echo "DEBUG: Running in non-interactive mode, continuing..." >&2
+   fi
 
     trap "exit 128" SIGINT
     trap "exit 129" SIGQUIT
@@ -214,12 +235,18 @@ case $1 in
 
     # Generate certificates
     if [[ ! $letscertificates =~ ^[Yy]$ ]]; then
-           echo "Issuing selfsigned certificates on local host..."
-    	generate_certificates $PHOENIXD_DOMAIN $LNBITS_DOMAIN
+        echo "Issuing selfsigned certificates on local host..."
+        echo "DEBUG: Starting self-signed certificate generation..." >&2
+        generate_certificates $PHOENIXD_DOMAIN $LNBITS_DOMAIN
+        echo "DEBUG: Self-signed certificate generation completed" >&2
     else
-           echo "Issuing Letsencrypt certificates on local host..."
-    	generate_certificates_certbot $PHOENIXD_DOMAIN $LNBITS_DOMAIN
+        echo "Issuing Letsencrypt certificates on local host..."
+        echo "DEBUG: Starting Letsencrypt certificate generation..." >&2
+        generate_certificates_certbot "$PHOENIXD_DOMAIN" "$LNBITS_DOMAIN" "$cert_email"
+        echo "DEBUG: Letsencrypt certificate generation completed" >&2
     fi
+
+    echo "DEBUG: Setting up stack configuration..." >&2
     
     # Generate password for Postgres
     POSTGRES_PASSWORD=$(generate_password)
@@ -487,7 +514,18 @@ case $1 in
   "help")
     print_help
     ;;
-
+  "list")
+    if [[ $( print_stacks 2>/dev/null | grep "^[0-9]" | wc -l ) -eq 0 ]]; then
+        echo "[]"  # Return empty JSON array if no stacks
+    else
+        print_stacks 2>/dev/null | grep "^[0-9]" | while read -r line; do
+            sid=$(echo "$line" | awk '{print $1}')
+            phoenixd=$(echo "$line" | awk '{print $2}')
+            lnbits=$(echo "$line" | awk '{print $3}')
+            echo "{\"id\":\"$sid\",\"phoenixd_domain\":\"$phoenixd\",\"lnbits_domain\":\"$lnbits\"}"
+        done
+    fi
+    ;;
   *)
     echo "Unsupported command '$1'" >&2
     print_help
