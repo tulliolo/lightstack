@@ -2,7 +2,7 @@
 
  Just run your own self-custodial cloud Lightning node on your VPS, from your domain name, with this stack. You immediately get a LNBits instance on your own node and the phoenixd endpoint available on a SSL connection.
 
- A multistack feature has been added and makes possible to add multiple stacks to the same VPS, served simultaneously.
+ A multistack feature has been added and makes possible to add multiple stacks to the same VPS, served simultaneously. A Web UI has been integrated as well
 
 ## Installation
 
@@ -64,7 +64,10 @@ Usage: init.sh [command]
 ```
 
 ### Install Web Interface
-To install the web interface, run:
+
+A WEB UI has been added to manage stacks. This is for now installed into the host system. Installing the web UI does not interfere with command line interface.
+
+To install the web UI, run:
 
 ```
 cd ~
@@ -89,4 +92,6 @@ Access phoenixd API endpoint with:
 
 in case you want to tune your configuration you can always setup the .env file as you prefer.
 
- 
+### VPS
+
+VPS provided and tested by https://denali.eu
