@@ -24,8 +24,9 @@ choose two subdomains on your domain, where you have the DNS management. They mu
 n1 will be the endpoint for phoenixd APIs
 lb1 will be the lnbits install
 
-### Initialize
+### Initialize (command line interface)
 
+You can install the stack either using the command line interface of by the Web UI. If you start by using command line, just always go on with that.
 
 ```
 cd lightstack
@@ -42,6 +43,7 @@ In case you need to start inizialization from the beginning, you need to clear e
 ```
 ./init.sh clear
 ```
+
 Please note that this will clear all data, configuration files and database in existing directory. If you had funds in that node, you will loose them all, so be careful and check it before
 
  Help shows usage and active stacks. Stacks can be also removed by the below commands:
@@ -65,7 +67,7 @@ Usage: init.sh [command]
 
 ### Install Web Interface
 
-A WEB UI has been added to manage stacks. This is for now installed into the host system. Installing the web UI does not interfere with command line interface.
+A WEB UI has been added to manage stacks. This is for now installed into the host system. Installing the web UI does not interfere with command line interface. So you can decide to use it or not based on your skills and preferences.
 
 To install the web UI, run:
 
@@ -73,7 +75,7 @@ To install the web UI, run:
 cd ~
 git clone https://github.com/massmux/lightstack.git
 cd lightstack
-sudo ./install.sh
+sudo ./gui-install.sh
 ```
 
 This command will set up the web-based management interface for your LightStack. The interface provides an easy way to monitor and manage your node.
