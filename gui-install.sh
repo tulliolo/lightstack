@@ -16,7 +16,7 @@ log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
 # Install system dependencies
 install_dependencies() {
-    log_info "Aggiornamento del sistema e installazione dipendenze..."
+    log_info "System update and dependencies install..."
 
     apt-get update
 
@@ -229,10 +229,10 @@ main() {
     install_dependencies
     install_nodejs
 
-    read -p "Domain for web interface (e.g., manager.yourdomain.com): " DOMAIN
+    read -p "Domain for Web UI (ex: manager.yourdomain.com): " DOMAIN
     read -p "Email for SSL certificates: " EMAIL
-    read -p "Admin username: " ADMIN_USER
-    read -s -p "Admin password: " ADMIN_PASS
+    read -p "Admin Username: " ADMIN_USER
+    read -s -p "Admin Password: " ADMIN_PASS
     echo
 
     systemctl stop lightstack-backend 2>/dev/null || true
