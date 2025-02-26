@@ -9,3 +9,4 @@ nginx
 stack*
 .backup
 .env
+stack_*

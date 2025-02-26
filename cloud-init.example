@@ -1,6 +1,6 @@
 #cloud-config
 
-# Debian does not contain gpg by default, so have to do this for the docker key
+# docker key for debian
 write_files:
   - path: /usr/share/keyrings/docker.asc
     owner: root:root
@@ -68,8 +68,8 @@ write_files:
       YT90qFF93M3v01BbxP+EIY2/9tiIPbrd
       =0YYh
       -----END PGP PUBLIC KEY BLOCK-----
-
-
+      
+      
 apt:
   sources:
     docker.list:
@@ -104,10 +104,10 @@ groups:
 users:
   - name: dev
     groups: docker
-    home: /home/ubuntu
+    home: /home/dev
     shell: /bin/bash
     sudo: ALL=(ALL) NOPASSWD:ALL
-    ssh-authorized-keys: <USER-RSA>
+    ssh-authorized-keys: <DEVUSER-KEY>
 
 # Add default auto created user to docker group
 system_info:
@@ -115,13 +115,20 @@ system_info:
     groups: [docker]
 
 runcmd:
-  # enable firewall
-  - ufw allow 22 comment "Allow SSH"
+
+  # enable firewall and configure
+  - ufw default deny incoming
+  - ufw default allow outgoing
+  - ufw allow 22 comment "Allow SSH for server management"
+  - ufw allow 80 comment "Allow 80 for certbot"
+  - ufw allow 22 comment "Allow 443"
+  - ufw allow 22 comment "Allow for web UI"
   - ufw enable
   
   # fix vim pasting issue
-  - /usr/bin/echo "set mouse=" > /home/dev/.vimrc
-  - /usr/bin/echo "set mouse=" > /root/.vimrc
+  - echo "set mouse=" >> /home/dev/.vimrc
+  - chown dev:dev /home/dev/.vimrc
+  - echo "set mouse=" > /root/.vimrc
 
   # Fix vim syntax highlighting
   - /usr/bin/sed -i 's;"syntax on;syntax on;' /etc/vim/vimrc
@@ -131,7 +138,7 @@ runcmd:
   - /usr/bin/docker pull hello-world
   - /usr/bin/docker run hello-world
   
-  # configure openssh
+  # configure openssh for security
   - sed -i -e '/^\(#\|\)PermitRootLogin/s/^.*$/PermitRootLogin no/' /etc/ssh/sshd_config
   - sed -i -e '/^\(#\|\)PasswordAuthentication/s/^.*$/PasswordAuthentication no/' /etc/ssh/sshd_config
   - sed -i -e '/^\(#\|\)KbdInteractiveAuthentication/s/^.*$/KbdInteractiveAuthentication no/' /etc/ssh/sshd_config
@@ -142,4 +149,7 @@ runcmd:
   - sed -i -e '/^\(#\|\)AllowAgentForwarding/s/^.*$/AllowAgentForwarding no/' /etc/ssh/sshd_config
   - sed -i -e '/^\(#\|\)AuthorizedKeysFile/s/^.*$/AuthorizedKeysFile .ssh\/authorized_keys/' /etc/ssh/sshd_config
   - sed -i '$a AllowUsers dev' /etc/ssh/sshd_config
+
+  
+
 
