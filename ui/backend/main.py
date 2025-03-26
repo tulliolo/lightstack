@@ -3,7 +3,7 @@ from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
-from typing import List, Optional
+from typing import List, Optional, Dict
 import jwt
 from datetime import datetime, timedelta
 import subprocess
@@ -11,6 +11,8 @@ import os
 import json
 import re
 import logging
+import threading
+import uuid
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -53,6 +55,16 @@ USERS_DB = {ADMIN_USER: ADMIN_PASS}
 
 logger.debug(f"Utenti disponibili: {list(USERS_DB.keys())}")
 
+# Classe per lo stato dei job
+class JobStatus:
+    PENDING = "pending"
+    RUNNING = "running"
+    COMPLETED = "completed"
+    FAILED = "failed"
+
+# Dizionario per tenere traccia dei job
+job_tracker: Dict[str, Dict] = {}
+
 # Modelli
 class Token(BaseModel):
     access_token: str
@@ -80,6 +92,52 @@ class StackResponse(BaseModel):
     lnbits_domain: str
 
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="token")
+
+# Funzione per eseguire la creazione dello stack in un thread separato
+def run_stack_creation_thread(job_id: str, stack: Stack, input_data: str):
+    try:
+        job_tracker[job_id]["status"] = JobStatus.RUNNING
+        
+        process = subprocess.run(
+            [os.path.join(SCRIPT_DIR, "init.sh"), "add"],
+            input=input_data,
+            capture_output=True,
+            text=True,
+            cwd=SCRIPT_DIR
+        )
+        
+        logger.debug(f"Process stdout:\n{process.stdout}")
+        logger.debug(f"Process stderr:\n{process.stderr}")
+        
+        if process.returncode != 0:
+            logger.error(f"Stack creation failed: {process.stdout}\n{process.stderr}")
+            job_tracker[job_id]["status"] = JobStatus.FAILED
+            job_tracker[job_id]["error"] = process.stderr or "Failed to create stack"
+            return
+        
+        # Estrai l'ID dello stack dal risultato
+        stack_id = None
+        for line in process.stdout.splitlines():
+            if "stack_" in line:
+                match = re.search(r"stack_(\d+)", line)
+                if match:
+                    stack_id = match.group(1)
+                    break
+        
+        if not stack_id:
+            job_tracker[job_id]["status"] = JobStatus.FAILED
+            job_tracker[job_id]["error"] = "Failed to extract stack ID"
+            return
+        
+        # Aggiorna lo stato del job
+        job_tracker[job_id]["status"] = JobStatus.COMPLETED
+        job_tracker[job_id]["stack_id"] = stack_id
+        
+        logger.info(f"Stack creation completed for job {job_id}, stack_id: {stack_id}")
+    except Exception as e:
+        logger.error(f"Error in run_stack_creation_thread: {str(e)}")
+        job_tracker[job_id]["status"] = JobStatus.FAILED
+        job_tracker[job_id]["error"] = str(e)
 
 # Funzioni di gestione nginx
 def manage_nginx(action: str):
@@ -196,7 +254,7 @@ async def get_stacks(current_user: User = Depends(get_current_user)):
         logger.error(f"Error listing stacks: {e.stderr}")
         raise HTTPException(status_code=500, detail=e.stderr)
 
-@app.post("/stacks", response_model=StackResponse)
+@app.post("/stacks")
 async def add_stack(stack: Stack, current_user: User = Depends(get_current_user)):
     try:
         logger.debug(f"Adding new stack with config: {stack.dict()}")
@@ -208,6 +266,7 @@ async def add_stack(stack: Stack, current_user: User = Depends(get_current_user)
                 logger.error(f"Failed to reconfigure nginx: {e}")
                 raise HTTPException(status_code=500, detail="Failed to reconfigure nginx")
 
+        # Crea l'input per lo script
         input_data = f"""{stack.phoenixd_domain}
 {stack.lnbits_domain}
 {"y" if stack.use_real_certs else "n"}
@@ -218,44 +277,32 @@ y
 """
         logger.debug(f"Input data exactly as sent to script:\n[START]\n{input_data}[END]")
         
-        process = subprocess.run(
-            [os.path.join(SCRIPT_DIR, "init.sh"), "add"],
-            input=input_data,
-            capture_output=True,
-            text=True,
-            cwd=SCRIPT_DIR
-        )
+        # Genera un ID per il job
+        job_id = str(uuid.uuid4())
         
-        logger.debug(f"Process stdout:\n{process.stdout}")
-        logger.debug(f"Process stderr:\n{process.stderr}")
-        
-        if process.returncode != 0:
-            logger.error(f"Stack creation failed: {process.stdout}\n{process.stderr}")
-            raise HTTPException(status_code=500, detail=process.stderr or "Failed to create stack")
-
-        stack_id = None
-        for line in process.stdout.splitlines():
-            if "stack_" in line:
-                match = re.search(r"stack_(\d+)", line)
-                if match:
-                    stack_id = match.group(1)
-                    break
-        
-        if not stack_id:
-            raise HTTPException(status_code=500, detail="Failed to extract stack ID")
-
-        # Costruiamo una risposta pulita e assicuriamoci che sia un array
-        response_data = {
-            "id": str(stack_id).strip(),
-            "phoenixd_domain": str(stack.phoenixd_domain).strip(),
-            "lnbits_domain": str(stack.lnbits_domain).strip()
+        # Inizializza il job nel tracker
+        job_tracker[job_id] = {
+            "status": JobStatus.PENDING,
+            "stack": stack.dict(),
+            "stack_id": None,
+            "error": None,
+            "created_at": datetime.utcnow().isoformat()
         }
         
-        logger.debug(f"Response data type: {type(response_data)}")
-        logger.debug(f"Response data content: {response_data}")
+        # Avvia il processo in un thread separato
+        thread = threading.Thread(
+            target=run_stack_creation_thread,
+            args=(job_id, stack, input_data)
+        )
+        thread.daemon = True
+        thread.start()
         
-        return response_data
-        
+        # Rispondi subito con l'ID del job
+        return {
+            "job_id": job_id,
+            "status": JobStatus.PENDING,
+            "message": "Stack creation started. Check job status to monitor progress."
+        }
     except Exception as e:
         logger.error(f"Error creating stack: {str(e)}")
         if stack.use_real_certs:
@@ -264,6 +311,25 @@ y
             except:
                 pass
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/jobs/{job_id}")
+async def get_job_status(job_id: str, current_user: User = Depends(get_current_user)):
+    if job_id not in job_tracker:
+        raise HTTPException(status_code=404, detail="Job not found")
+    
+    job = job_tracker[job_id]
+    
+    response = {
+        "job_id": job_id,
+        "status": job["status"]
+    }
+    
+    if job["status"] == JobStatus.COMPLETED:
+        response["stack_id"] = job["stack_id"]
+    elif job["status"] == JobStatus.FAILED:
+        response["error"] = job["error"]
+    
+    return response
 
 @app.delete("/stacks/{stack_id}")
 async def remove_stack(stack_id: str, current_user: User = Depends(get_current_user)):
@@ -330,3 +396,4 @@ async def health_check():
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8005)
+
