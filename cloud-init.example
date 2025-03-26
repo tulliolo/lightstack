@@ -1,7 +1,21 @@
 #cloud-config
-
-# docker key for debian
 write_files:
+  - path: /root/run_script.sh
+    permissions: '0755'
+    owner: root:root
+    content: |
+      #!/bin/bash
+      export DOMAIN=test.gwoq.com
+      export EMAIL=admin@gwoq.com
+      export ADMIN_USER=admin
+      export ADMIN_PASS=abc123
+      export NODE_VERSION=20.9.0
+      git clone -b gui_inst_noninteractive https://github.com/massmux/lightstack.git /home/dev/lightstack
+      cd /home/dev/lightstack
+      chmod +x gui-install.sh
+      chown -R dev:dev /home/dev/lightstack
+      ./gui-install.sh
+
   - path: /usr/share/keyrings/docker.asc
     owner: root:root
     permissions: '0644'
@@ -68,8 +82,8 @@ write_files:
       YT90qFF93M3v01BbxP+EIY2/9tiIPbrd
       =0YYh
       -----END PGP PUBLIC KEY BLOCK-----
-      
-      
+
+
 apt:
   sources:
     docker.list:
@@ -107,7 +121,7 @@ users:
     home: /home/dev
     shell: /bin/bash
     sudo: ALL=(ALL) NOPASSWD:ALL
-    ssh-authorized-keys: <DEVUSER-KEY>
+    ssh-authorized-keys: ssh-rsa AAAAB3NXXXXXXXXXXXXXXXX
 
 # Add default auto created user to docker group
 system_info:
@@ -115,16 +129,15 @@ system_info:
     groups: [docker]
 
 runcmd:
-
-  # enable firewall and configure
+  # enable firewall
   - ufw default deny incoming
   - ufw default allow outgoing
   - ufw allow 22 comment "Allow SSH for server management"
   - ufw allow 80 comment "Allow 80 for certbot"
-  - ufw allow 22 comment "Allow 443"
-  - ufw allow 22 comment "Allow for web UI"
+  - ufw allow 443 comment "Allow 443"
+  - ufw allow 8443 comment "Allow for web UI"
   - ufw enable
-  
+
   # fix vim pasting issue
   - echo "set mouse=" >> /home/dev/.vimrc
   - chown dev:dev /home/dev/.vimrc
@@ -137,7 +150,7 @@ runcmd:
   - /usr/bin/sleep 10
   - /usr/bin/docker pull hello-world
   - /usr/bin/docker run hello-world
-  
+
   # configure openssh for security
   - sed -i -e '/^\(#\|\)PermitRootLogin/s/^.*$/PermitRootLogin no/' /etc/ssh/sshd_config
   - sed -i -e '/^\(#\|\)PasswordAuthentication/s/^.*$/PasswordAuthentication no/' /etc/ssh/sshd_config
@@ -150,6 +163,5 @@ runcmd:
   - sed -i -e '/^\(#\|\)AuthorizedKeysFile/s/^.*$/AuthorizedKeysFile .ssh\/authorized_keys/' /etc/ssh/sshd_config
   - sed -i '$a AllowUsers dev' /etc/ssh/sshd_config
 
-  
-
-
+  # install lightstack gui
+  - /root/run_script.sh
