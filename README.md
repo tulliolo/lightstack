@@ -69,16 +69,20 @@ Usage: init.sh [command]
 
 A WEB UI has been added to manage stacks. This is for now installed into the host system. Installing the web UI does not interfere with command line interface. So you can decide to use it or not based on your skills and preferences.
 
-To install the web UI, run:
+To install the web UI (interactive mode), run:
 
 ```
 cd ~
 git clone https://github.com/massmux/lightstack.git
 cd lightstack
-sudo ./gui-install.sh
+sudo ./gui-install-interactive.sh
 ```
 
 This command will set up the web-based management interface for your LightStack. The interface provides an easy way to monitor and manage your node.
+
+Otherwise you can prefer non-interactive mode. In this case, set up your details into the kickstart.sh file with the environment variables, then run it.
+
+Please be always sure that all your domains and subdomains point to the IP of the VPS as DNS A record (not cname).
 
 
 ### Access
