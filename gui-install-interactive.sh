@@ -14,27 +14,21 @@ log_info() { echo -e "${GREEN}[INFO]${NC} $1"; }
 log_warn() { echo -e "${YELLOW}[WARN]${NC} $1"; }
 log_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
-# Default values (Override via environment variables)
-DOMAIN="${DOMAIN:-manager.example.com}"
-EMAIL="${EMAIL:-admin@example.com}"
-ADMIN_USER="${ADMIN_USER:-admin}"
-ADMIN_PASS="${ADMIN_PASS:-changeme}"
-NODE_VERSION="${NODE_VERSION:-20.9.0}"
-
 # Install system dependencies
 install_dependencies() {
-    log_info "Updating system and installing dependencies..."
+    log_info "System update and dependencies install..."
 
-    apt-get update -y
+    apt-get update
+
     apt-get install -y \
         python3 \
         python3-pip \
         python3-venv \
         nginx \
         certbot \
+        python3-certbot-nginx \
         curl \
         git \
-    	python3-certbot-nginx \
         build-essential \
         openssl
 }
@@ -49,7 +43,7 @@ install_nvm() {
         [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
         [ -s "$NVM_DIR/bash_completion" ] && \. "$NVM_DIR/bash_completion"
     else
-        log_info "NVM is already installed."
+        log_info "NVM is already installed. Skipping..."
     fi
 }
 
@@ -57,10 +51,15 @@ install_nvm() {
 install_nodejs() {
     install_nvm
 
+    # Ensure nvm is loaded
     export NVM_DIR="$HOME/.nvm"
     [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
 
-    log_info "Installing Node.js $NODE_VERSION..."
+    # Prompt for Node.js version
+    read -p "Enter Node.js version to install (default: 20.9.0): " NODE_VERSION
+    NODE_VERSION=${NODE_VERSION:-20.9.0}
+
+    log_info "Installing Node.js $NODE_VERSION using nvm..."
     nvm install "$NODE_VERSION"
     nvm use "$NODE_VERSION"
     nvm alias default "$NODE_VERSION"
@@ -122,10 +121,12 @@ setup_frontend() {
 
     cd ui/frontend
 
+    # Load nvm
     export NVM_DIR="$HOME/.nvm"
     [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
 
-    nvm use "$NODE_VERSION"
+    # Use the selected Node.js version
+    nvm use "$(node --version | sed 's/v//')"
 
     rm -rf node_modules package-lock.json
     npm cache clean --force
@@ -143,6 +144,7 @@ setup_frontend() {
 
 # Setup nginx configuration
 setup_nginx() {
+    local DOMAIN=$1
     log_info "Setting up nginx configuration for $DOMAIN..."
 
     mkdir -p /etc/nginx/sites-available /etc/nginx/sites-enabled
@@ -188,6 +190,8 @@ EOF
 
 # Setup SSL certificates
 setup_ssl() {
+    local DOMAIN=$1
+    local EMAIL=$2
     log_info "Setting up SSL certificates..."
 
     apt-get install -y python3-certbot-nginx
@@ -219,19 +223,25 @@ EOF
 # Main script
 main() {
     clear
-    log_info "Starting Lightstack UI Installation (Non-Interactive Mode)"
+    log_info "Installing Lightstack UI (Traditional Setup)"
 
     check_requirements
     install_dependencies
     install_nodejs
+
+    read -p "Domain for Web UI (ex: manager.yourdomain.com): " DOMAIN
+    read -p "Email for SSL certificates: " EMAIL
+    read -p "Admin Username: " ADMIN_USER
+    read -s -p "Admin Password: " ADMIN_PASS
+    echo
 
     systemctl stop lightstack-backend 2>/dev/null || true
 
     generate_env
     setup_backend
     setup_frontend
-    setup_ssl
-    setup_nginx
+    setup_ssl "$DOMAIN" "$EMAIL"
+    setup_nginx "$DOMAIN"
 
     log_info "Installation completed successfully!"
     echo
@@ -241,3 +251,4 @@ main() {
 
 trap 'echo -e "\n${RED}Error: Installation interrupted${NC}"; exit 1' ERR
 main
+
